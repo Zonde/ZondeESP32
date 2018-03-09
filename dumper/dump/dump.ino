@@ -1,6 +1,10 @@
 /**
- * Keeps a set of unique sniffed MAC/SSID pairs and prints them to Serial
- * Proof of concept that we can capture and analyse probe requests on the ESP32
+ * Dumps 802.11 probe request payloads to the serial
+ * 
+ * The start of data is marked by sending <<START>>
+ * Then for each packet:
+ *   The length of the packet is sent (uint32_t)
+ *   The data is sent (little-endian)
  *
  * Author: Daan de Graaf
  */
@@ -10,16 +14,15 @@
 #include "esp_event_loop.h"
 #include "nvs_flash.h"
 
-#include <set>
-
 #define CHANNEL 1
+#define MAX_CHANNEL 11
 #define BAUD_RATE 115200
-#define CHANNEL_HOPPING true 
-#define MAX_CHANNEL 11 
+#define CHANNEL_HOPPING true
 #define HOP_INTERVAL 214 
 
 int ch = CHANNEL;
 unsigned long lastChannelChange = 0;
+
 
 typedef struct {
     unsigned version:2;
@@ -40,26 +43,10 @@ typedef struct {
 
 typedef struct {
     wifi_ieee80211_mac_hdr_t hdr;
-    uint8_t payload[0]; 
+    uint8_t payload[0];
 } __packed __aligned(2) wifi_ieee80211_packet_t;
 
-struct Probe {
-    uint8_t transmitter[6];
-    char ssid[33];
-};
-
-inline bool operator<(const Probe& lhs, const Probe& rhs)
-{
-    for(int i = 0; i < 6; i++) {
-        if(lhs.transmitter[i] != rhs.transmitter[i]) {
-            return lhs.transmitter[i] < rhs.transmitter[i];
-        }
-    }
-    return strcmp(lhs.ssid, rhs.ssid) < 0;
-}
-
-std::set<Probe> probes;
-
+/* Callback for received packets */
 void sniffer(void *buff, wifi_promiscuous_pkt_type_t type){
     if (type != WIFI_PKT_MGMT)
         return;
@@ -68,57 +55,36 @@ void sniffer(void *buff, wifi_promiscuous_pkt_type_t type){
     const wifi_ieee80211_packet_t *ipkt = (wifi_ieee80211_packet_t *)ppkt->payload;
     const wifi_ieee80211_mac_hdr_t *hdr = &ipkt->hdr;
 
-    // Filter on probe requests
+    // Verify that this is a probe request
     if(hdr->frame_ctrl.subtype != 0x04) {
         return;
     }
 
-    uint8_t* payload = (uint8_t*) ppkt->payload;
-    int body_len = ppkt->rx_ctrl.sig_len - 28;
-    uint8_t* body = payload + 24;
-
-    char ssid[33];
-    int i = 0;
-    while(i < body_len) {
-        uint8_t length = body[i+1];
-        if(body[i] == 0) {
-            // SSID
-            if(length > 0) {
-                Probe* p = new Probe;
-                memcpy(p->transmitter, hdr->addr2, 6);
-                memcpy(p->ssid, body+i+2, length);
-                p->ssid[length] = '\0';
-
-                int old_size = probes.size();
-                probes.insert(*p);
-                int new_size = probes.size();
-
-                if(new_size > old_size) {
-                    Serial.printf("Number of unique probes: %d\n", new_size);
-                    for(Probe p : probes) {
-                        Serial.printf("MAC: %02x:%02x:%02x:%02x:%02x:%02x, SSID: %s\n", 
-                        p.transmitter[0], p.transmitter[1], p.transmitter[2], 
-                        p.transmitter[3], p.transmitter[4], p.transmitter[5], 
-                        p.ssid);
-                    }
-                }
-            }
-        }
-        i += 2 + length;
+    uint32_t len = ppkt->rx_ctrl.sig_len;
+    uint8_t* bytes = (uint8_t*) &len;
+    for(int i = 0; i < 4; i++) {
+        Serial.write(bytes[i]);
     }
+    
+    bytes = (uint8_t*) ppkt->payload;
+    for(uint32_t i = 0; i < len; i++) {
+        Serial.write(bytes[i]);
+    }
+    
 }
 
 esp_err_t event_handler(void *ctx, system_event_t *event){ return ESP_OK; }
 
+
 void setup() {
-    /* start Serial */
+
     Serial.begin(BAUD_RATE);
     delay(2000);
     Serial.println();
 
     Serial.println("<<START>>");
 
-    /* setup wifi */
+    // Setup wifi
     nvs_flash_init();
     tcpip_adapter_init();
     ESP_ERROR_CHECK( esp_event_loop_init(event_handler, NULL) );
@@ -134,11 +100,11 @@ void setup() {
 }
 
 void loop() {
-    if(CHANNEL_HOPPING){
+    if(CHANNEL_HOPPING) {
         unsigned long currentTime = millis();
         if(currentTime - lastChannelChange >= HOP_INTERVAL){
             lastChannelChange = currentTime;
-            ch++; 
+            ch++;
             if(ch > MAX_CHANNEL) ch = 1;
             wifi_second_chan_t secondCh = (wifi_second_chan_t)NULL;
             esp_wifi_set_channel(ch,secondCh);
