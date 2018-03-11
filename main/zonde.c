@@ -21,6 +21,7 @@
 #include "esp_log.h"
 #include "esp_event_loop.h"
 #include "nvs_flash.h"
+#include "esp_request.h"
 
 #include <string.h>
 
@@ -42,6 +43,9 @@
 
 static const char *TAG = "sniffer";
 static int sniffChan = MIN_CHANNEL; 
+
+static EventGroupHandle_t wifi_event_group;
+const int CONNECTED_BIT = BIT0;
 
 typedef struct {
     unsigned version:2;
@@ -70,6 +74,10 @@ typedef struct {
     char ssid[33];
 } Probe;
 
+#define PROBE_BUFFER_LEN 100
+static Probe probes[PROBE_BUFFER_LEN];
+static unsigned int probes_len = 0;
+
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
     uint8_t* mac;
@@ -82,9 +90,11 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
             ESP_LOGI(TAG, "SYSTEM_EVENT_STA_GOT_IP");
             ESP_LOGI(TAG, "Got IP: %s\n",
                      ip4addr_ntoa(&event->event_info.got_ip.ip_info.ip));
+            xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
             break;
         case SYSTEM_EVENT_STA_DISCONNECTED:
             ESP_LOGI(TAG, "SYSTEM_EVENT_STA_DISCONNECTED");
+            xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
             break;
 
         case SYSTEM_EVENT_AP_START:
@@ -158,15 +168,19 @@ static void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
         if(body[i] == 0) {
             // SSID
             if(length > 0) {
-                Probe p;
-                memcpy(p.transmitter, hdr->addr2, 6);
-                memcpy(p.ssid, body+i+2, length);
-                p.ssid[length] = '\0';
+                if(probes_len == PROBE_BUFFER_LEN) {
+                    ESP_LOGW("sniffer_callback", "probes buffer exhausted");
+                    return;
+                }
+                Probe* p = probes + probes_len++;
+                memcpy(p->transmitter, hdr->addr2, 6);
+                memcpy(p->ssid, body+i+2, length);
+                p->ssid[length] = '\0';
 
                 ESP_LOGI("sniffer_callback", "MAC: %02x:%02x:%02x:%02x:%02x:%02x, SSID: %s\n", 
-                p.transmitter[0], p.transmitter[1], p.transmitter[2], 
-                p.transmitter[3], p.transmitter[4], p.transmitter[5], 
-                p.ssid);
+                p->transmitter[0], p->transmitter[1], p->transmitter[2], 
+                p->transmitter[3], p->transmitter[4], p->transmitter[5], 
+                p->ssid);
             }
             // TODO parse more
         }
@@ -201,14 +215,46 @@ static void wifi_init(void)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 }
 
-void wifi_manager(void *pvParameter) {
+void upload_callback(request_t* req, char* data, int len)
+{
+    ESP_LOGI("upload_callback", "%s", data);
+}
+
+void upload_results(void)
+{
+    xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
+    for(unsigned int i = 0; i < probes_len; i++) {
+        // TODO I have no idea if this is really big enough
+        char postfields[100];
+        sprintf(postfields, "mac=%02x%%3A%02x%%3A%02x%%3A%02x%%3A%02x%%3A%02x&ssid=%s",
+            probes[i].transmitter[0],
+            probes[i].transmitter[1],
+            probes[i].transmitter[2],
+            probes[i].transmitter[3],
+            probes[i].transmitter[4],
+            probes[i].transmitter[5],
+            probes[i].ssid
+        );
+        ESP_LOGI("upload_results", "Uploading: %s", postfields);
+        request_t* req = req_new("http://zonde.herokuapp.com/api/post/");
+        req_setopt(req, REQ_SET_METHOD, "POST");
+        req_setopt(req, REQ_SET_POSTFIELDS, postfields);
+        req_setopt(req, REQ_FUNC_DOWNLOAD_CB, upload_callback);
+        int status = req_perform(req);
+        req_clean(req);
+        ESP_LOGI("upload", "Status code: %d", status);
+    }
+    probes_len = 0;
+}
+
+void wifi_manager(void *pvParameter) 
+{
     wifi_init();
     while(true) {
         ESP_LOGI("wifi_manager", "Setting mode: STA");
         wifi_sta();
 
-        // Do stuff here instead
-        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        upload_results();
         
         ESP_LOGI("wifi_manager", "Setting mode: SNIFF");
         wifi_sniff();
@@ -232,6 +278,8 @@ void app_main()
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK( ret );
+
+    wifi_event_group = xEventGroupCreate();
 
     xTaskCreate(&wifi_manager, "wifi_manager", 5000, NULL, 5, NULL);
 }
