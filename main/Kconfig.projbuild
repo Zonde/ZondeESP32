@@ -1,0 +1,29 @@
+menu "Sniffer configuration"
+
+config WIFI_SSID
+    string "WiFi SSID"
+    default "myssid"
+    help
+        SSID (network name) to connect to when uploading results.
+
+config WIFI_PASSWORD
+    string "WiFi Password"
+    default "mypassword"
+    help
+        WiFi password (WPA or WPA2) to use.
+
+config CHANNEL_HOP_INTERVAL
+    int "Hop interval"
+    range 0 10000
+    default 200
+    help
+        number of milliseconds to sniff before switching to the next channel
+
+config SNIFF_INTERVAL
+    int "Sniff interval"
+    range 1 360
+    default 30
+    help
+        number of seconds to sniff before uploading results
+
+endmenu

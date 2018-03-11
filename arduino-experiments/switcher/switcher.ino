@@ -12,14 +12,25 @@
 
 #include <set>
 
+#include <WiFi.h>
+#include <WiFiMulti.h>
+
+WiFiMulti WiFiMulti;
+
 #define CHANNEL 1
 #define BAUD_RATE 115200
 #define CHANNEL_HOPPING true 
 #define MAX_CHANNEL 11 
 #define HOP_INTERVAL 214 
 
+#define UPLOAD_INTERVAL 10000
+#define DEBUG_ESP_WIFI
+#define DEBUG_ESP_PORT Serial
+
 int ch = CHANNEL;
 unsigned long lastChannelChange = 0;
+
+unsigned long lastUploadTime = 0;
 
 typedef struct {
     unsigned version:2;
@@ -108,7 +119,9 @@ void sniffer(void *buff, wifi_promiscuous_pkt_type_t type){
     }
 }
 
-esp_err_t event_handler(void *ctx, system_event_t *event){ return ESP_OK; }
+esp_err_t event_handler(void *ctx, system_event_t *event){ 
+    return ESP_OK; 
+}
 
 void setup() {
     /* start Serial */
@@ -116,12 +129,20 @@ void setup() {
     delay(2000);
     Serial.println();
 
-    Serial.println("<<START>>");
+    WiFiMulti.addAP("de Graaf", "9D543641DDAB");
 
     /* setup wifi */
     nvs_flash_init();
     tcpip_adapter_init();
-    ESP_ERROR_CHECK( esp_event_loop_init(event_handler, NULL) );
+
+    wifi_set_sniff();
+    
+    Serial.println("<<START>>");
+}
+
+void wifi_set_sniff() {
+    Serial.println("Init done");
+    //ESP_ERROR_CHECK( esp_event_loop_init(event_handler, NULL) );
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
     ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
@@ -133,9 +154,28 @@ void setup() {
     esp_wifi_set_channel(ch,secondCh);
 }
 
+void wifi_reset() {
+    //ESP_ERROR_CHECK( esp_wifi_disconnect() );
+    ESP_ERROR_CHECK( esp_wifi_stop() );
+    ESP_ERROR_CHECK( esp_wifi_deinit() );
+}
+
+void wifi_set_sta() {
+    Serial.print("Connecting to wifi");
+    while(WiFiMulti.run() != WL_CONNECTED) {
+        Serial.print(".");
+        delay(500);
+    }
+
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+}
+
 void loop() {
+    unsigned long currentTime = millis();
     if(CHANNEL_HOPPING){
-        unsigned long currentTime = millis();
         if(currentTime - lastChannelChange >= HOP_INTERVAL){
             lastChannelChange = currentTime;
             ch++; 
@@ -144,4 +184,22 @@ void loop() {
             esp_wifi_set_channel(ch,secondCh);
         }
     }
+
+    if(currentTime - lastUploadTime >= UPLOAD_INTERVAL) {
+        Serial.println("Turning off sniffing to upload data");
+        lastUploadTime = currentTime;
+        wifi_reset();
+        delay(500);
+        wifi_set_sta();
+        delay(1000);
+        Serial.println("Data uploaded, returning to sniffing..");
+        //ESP_ERROR_CHECK( esp_wifi_disconnect() );
+        delay(1000);
+        wifi_reset();
+        Serial.println("Reset done");
+        delay(1000);
+        wifi_set_sniff();
+        
+    }
+    
 }
