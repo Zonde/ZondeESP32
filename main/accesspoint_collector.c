@@ -28,3 +28,18 @@ void add_beacon(Beacon *b) {
     ESP_LOGI("accesspoint_collector", "added to beacon buffer: %02x:%02x:%02x:%02x:%02x:%02x",
         b->source_mac[0],b->source_mac[1],b->source_mac[2],b->source_mac[3],b->source_mac[4],b->source_mac[5])
 }
+
+Beacon get_beacon(int index) {
+    if (index >= beacons_len) {
+        Beacon b;
+        for (int i = 0; i < 6; i++) {
+            b.source_mac[i] = 0x00;
+        }
+        return b;
+    }
+    return beacons[index];
+}
+
+int get_beacons_length() {
+    return beacons_len;
+}

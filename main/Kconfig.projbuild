@@ -32,4 +32,11 @@ config JAM_ENABLED
     help
         Whether or not to enable the deauth attack feature
 
+config JAM_COUNT
+    int "Jam count"
+    range 1 10
+    default 1
+    help
+        The amount of jams sent consecutively
+
 endmenu
