@@ -5,6 +5,8 @@
 
 #include <string.h>
 
+#include "probes.h"
+
 typedef struct {
     unsigned version:2;
     unsigned type:2;
@@ -27,17 +29,8 @@ typedef struct {
     uint8_t payload[0];
 } __packed __aligned(2) wifi_ieee80211_packet_t;
 
-#define PROBE_BUFFER_LEN 100
-static Probe probes[PROBE_BUFFER_LEN];
-static unsigned int probes_len = 0;
-
-unsigned int get_probes(Probe** p) {
-    *p = probes;
-    return probes_len;
-}
-
-void clear_probes() {
-    probes_len = 0;
+void sniffer_init() {
+    sniffed_probes = Probe_set_create(0);
 }
 
 void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
@@ -53,32 +46,35 @@ void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
 
     // Filter on probe requests
     if(hdr->frame_ctrl.subtype == 0x04) {
-      uint8_t* body = payload + 24;
+        uint8_t* body = payload + 24;
 
-      int i = 0;
-      while(i < body_len) {
-          uint8_t length = body[i+1];
-          if(body[i] == 0) {
-              // SSID
-              if(length > 0) {
-                  if(probes_len == PROBE_BUFFER_LEN) {
-                      ESP_LOGW("sniffer_callback", "probes buffer exhausted");
-                      return;
-                  }
-                  Probe* p = probes + probes_len++;
-                  memcpy(p->transmitter, hdr->addr2, 6);
-                  memcpy(p->ssid, body+i+2, length);
-                  p->ssid[length] = '\0';
+        int i = 0;
+        while(i < body_len) {
+            uint8_t length = body[i+1];
+            if(body[i] == 0) {
+                // SSID
+                if(length > 0) {
+                    Probe p;
+                    memcpy(p.transmitter, hdr->addr2, 6);
+                    memcpy(p.ssid, body+i+2, length);
+                    for(int i = length; i < 33; i++) {
+                        // Zero out the remaining part
+                        p.ssid[i] = '\0';
+                    }
+                    bool duplicate = Probe_set_add(sniffed_probes, &p);
+                    if(duplicate) {
+                        ESP_LOGW("sniffer_callback_probe", "Duplicate found!");
+                    }
 
-                  ESP_LOGI("sniffer_callback_probe", "MAC: %02x:%02x:%02x:%02x:%02x:%02x, SSID: %s\n",
-                  p->transmitter[0], p->transmitter[1], p->transmitter[2],
-                  p->transmitter[3], p->transmitter[4], p->transmitter[5],
-                  p->ssid);
-              }
-              // TODO parse more
-          }
-          i += 2 + length;
-      }
+                    ESP_LOGI("sniffer_callback_probe", "MAC: %02x:%02x:%02x:%02x:%02x:%02x, SSID: %s\n",
+                    p.transmitter[0], p.transmitter[1], p.transmitter[2],
+                    p.transmitter[3], p.transmitter[4], p.transmitter[5],
+                    p.ssid);
+                }
+                // TODO parse more
+            }
+            i += 2 + length;
+        }
     }
     // Filter on beacon frames
     else if (hdr->frame_ctrl.subtype == 0x08) {
@@ -90,7 +86,5 @@ void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
       Beacon b;
       memcpy(b.source_mac, mac, 6);
       add_beacon(&b);
-
-      //ESP_LOGI("sniffer_callback_beacon", "MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5])
     }
 }

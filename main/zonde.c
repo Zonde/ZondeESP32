@@ -24,13 +24,14 @@
 
 #include "event_handler.h"
 #include "wifi.h"
-#include "sniffer_callback.h"
 #include "upload.h"
 #include "wifi_deauth.h"
+#include "sniffer_callback.h"
 
 void wifi_manager(void *pvParameter)
 {
     wifi_initialize();
+    sniffer_init();
     while(true) {
         ESP_LOGI("wifi_manager", "Setting mode: SNIFF");
         wifi_sniff(sniffer_callback);
@@ -47,10 +48,7 @@ void wifi_manager(void *pvParameter)
 
         xEventGroupSetBits(wifi_event_group, UPLOADING_BIT);
         xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
-        Probe* probes = NULL;
-        unsigned int len = get_probes(&probes);
-        upload_results(probes, len);
-        clear_probes();
+        upload_results();
         xEventGroupClearBits(wifi_event_group, UPLOADING_BIT);
     }
 }

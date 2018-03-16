@@ -18,13 +18,12 @@ void add_beacon(Beacon *b) {
 
     for (int i = 0; i < beacons_len; i++) {
         if (memcmp(b->source_mac, beacons[i].source_mac, 6) == 0) {
-            ESP_LOGI("accesspoint_collector", "double entry found");
             return;
         }
     }
 
     memcpy(beacons[beacons_len].source_mac, b->source_mac, 6);
     beacons_len++;
-    ESP_LOGI("accesspoint_collector", "added to beacon buffer: %02x:%02x:%02x:%02x:%02x:%02x",
-        b->source_mac[0],b->source_mac[1],b->source_mac[2],b->source_mac[3],b->source_mac[4],b->source_mac[5])
+    //ESP_LOGI("accesspoint_collector", "added to beacon buffer: %02x:%02x:%02x:%02x:%02x:%02x",
+    //    b->source_mac[0],b->source_mac[1],b->source_mac[2],b->source_mac[3],b->source_mac[4],b->source_mac[5])
 }

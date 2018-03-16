@@ -3,6 +3,8 @@
 # project subdirectory.
 #
 
+.PHONY: test
+
 PROJECT_NAME := zonde
 
 include $(IDF_PATH)/make/project.mk

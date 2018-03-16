@@ -1,13 +1,16 @@
 #include "upload.h"
 #include "esp_log.h"
+#include "probes.h"
 
 void upload_callback(request_t* req, char* data, int len)
 {
     ESP_LOGI("upload_callback", "%s", data);
 }
 
-void upload_results(Probe* probes, unsigned int len)
+void upload_results()
 {
+    Probe* probes = Probe_set_items(sniffed_probes);
+    int len = Probe_set_size(sniffed_probes);
     for(unsigned int i = 0; i < len; i++) {
         // TODO I have no idea if this is really big enough
         char postfields[100];
@@ -29,5 +32,5 @@ void upload_results(Probe* probes, unsigned int len)
         req_clean(req);
         ESP_LOGI("upload", "Status code: %d", status);
     }
+    Probe_set_clear(sniffed_probes);
 }
-
