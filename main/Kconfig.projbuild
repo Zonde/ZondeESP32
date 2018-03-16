@@ -26,4 +26,10 @@ config SNIFF_INTERVAL
     help
         number of seconds to sniff before uploading results
 
+config JAM_ENABLED
+    bool "Enable jamming"
+    default n
+    help
+        Whether or not to enable the deauth attack feature
+
 endmenu

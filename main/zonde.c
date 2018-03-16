@@ -7,7 +7,7 @@
     CONDITIONS OF ANY KIND, either express or implied.
 */
 /*
-    Sniffer application for ESP32. 
+    Sniffer application for ESP32.
     Sniffs probe requests and periodically connects to the configured SSID
     to upload results to a remote server.
 
@@ -44,7 +44,7 @@ esp_err_t esp_wifi_80211_tx(wifi_interface_t ifx, const void *buffer, int len, b
 
 
 static const char *TAG = "sniffer";
-static int sniffChan = MIN_CHANNEL; 
+static int sniffChan = MIN_CHANNEL;
 
 static EventGroupHandle_t wifi_event_group;
 const int CONNECTED_BIT = BIT0;
@@ -69,7 +69,7 @@ typedef struct {
 
 typedef struct {
     wifi_ieee80211_mac_hdr_t hdr;
-    uint8_t payload[0]; 
+    uint8_t payload[0];
 } __packed __aligned(2) wifi_ieee80211_packet_t;
 
 typedef struct {
@@ -184,9 +184,9 @@ static void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
                 memcpy(p->ssid, body+i+2, length);
                 p->ssid[length] = '\0';
 
-                ESP_LOGI("sniffer_callback", "MAC: %02x:%02x:%02x:%02x:%02x:%02x, SSID: %s\n", 
-                p->transmitter[0], p->transmitter[1], p->transmitter[2], 
-                p->transmitter[3], p->transmitter[4], p->transmitter[5], 
+                ESP_LOGI("sniffer_callback", "MAC: %02x:%02x:%02x:%02x:%02x:%02x, SSID: %s\n",
+                p->transmitter[0], p->transmitter[1], p->transmitter[2],
+                p->transmitter[3], p->transmitter[4], p->transmitter[5],
                 p->ssid);
             }
             // TODO parse more
@@ -272,7 +272,7 @@ void wifi_jam(void)
     ESP_LOGI("wifi_jam", "Frame sent on channel: %d", sniffChan);
 }
 
-void wifi_manager(void *pvParameter) 
+void wifi_manager(void *pvParameter)
 {
     wifi_init();
     while(true) {
@@ -285,9 +285,12 @@ void wifi_manager(void *pvParameter)
                 sniffChan = MIN_CHANNEL;
             }
             esp_wifi_set_channel(sniffChan, SECOND_CHANNEL);
-            wifi_jam();
+            #ifdef CONFIG_JAM_ENABLED
+                wifi_jam();
+            #endif
+
         }
-        
+
         ESP_LOGI("wifi_manager", "Setting mode: STA");
         wifi_sta();
 
