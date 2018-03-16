@@ -78,13 +78,13 @@ void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
     }
     // Filter on beacon frames
     else if (hdr->frame_ctrl.subtype == 0x08) {
-      uint8_t mac[6];
+        uint8_t mac[6];
 
-      for (int i = 10; i < 16; i++) {
-        mac[i - 10] = payload[i];
-      }
-      Beacon b;
-      memcpy(b.source_mac, mac, 6);
-      add_beacon(&b);
+        for (int i = 10; i < 16; i++) {
+            mac[i - 10] = payload[i];
+        }
+        Beacon b;
+        memcpy(b.source_mac, mac, 6);
+        add_beacon(&b);
     }
 }
