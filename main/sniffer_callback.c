@@ -53,43 +53,41 @@ void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
 
     // Filter on probe requests
     if(hdr->frame_ctrl.subtype == 0x04) {
-      uint8_t* body = payload + 24;
+          uint8_t* body = payload + 24;
 
-      int i = 0;
-      while(i < body_len) {
-          uint8_t length = body[i+1];
-          if(body[i] == 0) {
-              // SSID
-              if(length > 0) {
-                  if(probes_len == PROBE_BUFFER_LEN) {
-                      ESP_LOGW("sniffer_callback", "probes buffer exhausted");
-                      return;
+          int i = 0;
+          while(i < body_len) {
+              uint8_t length = body[i+1];
+              if(body[i] == 0) {
+                  // SSID
+                  if(length > 0) {
+                      if(probes_len == PROBE_BUFFER_LEN) {
+                          ESP_LOGW("sniffer_callback", "probes buffer exhausted");
+                          return;
+                      }
+                      Probe* p = probes + probes_len++;
+                      memcpy(p->transmitter, hdr->addr2, 6);
+                      memcpy(p->ssid, body+i+2, length);
+                      p->ssid[length] = '\0';
+
+                      ESP_LOGI("sniffer_callback_probe", "MAC: %02x:%02x:%02x:%02x:%02x:%02x, SSID: %s\n",
+                      p->transmitter[0], p->transmitter[1], p->transmitter[2],
+                      p->transmitter[3], p->transmitter[4], p->transmitter[5],
+                      p->ssid);
                   }
-                  Probe* p = probes + probes_len++;
-                  memcpy(p->transmitter, hdr->addr2, 6);
-                  memcpy(p->ssid, body+i+2, length);
-                  p->ssid[length] = '\0';
-
-                  ESP_LOGI("sniffer_callback_probe", "MAC: %02x:%02x:%02x:%02x:%02x:%02x, SSID: %s\n",
-                  p->transmitter[0], p->transmitter[1], p->transmitter[2],
-                  p->transmitter[3], p->transmitter[4], p->transmitter[5],
-                  p->ssid);
+                  // TODO parse more
               }
-              // TODO parse more
+              i += 2 + length;
           }
-          i += 2 + length;
-      }
-    }
-    // Filter on beacon frames
-    else if (hdr->frame_ctrl.subtype == 0x08) {
-      uint8_t mac[6];
+      } else if (hdr->frame_ctrl.subtype == 0x08) { // beacon
+          uint8_t mac[6];
 
-      for (int i = 10; i < 16; i++) {
-        mac[i - 10] = payload[i];
-      }
-      Beacon b;
-      memcpy(b.source_mac, mac, 6);
-      add_beacon(&b);
+          for (int i = 10; i < 16; i++) {
+              mac[i - 10] = payload[i];
+          }
+          Beacon b;
+          memcpy(b.source_mac, mac, 6);
+          add_beacon(&b);
 
       //ESP_LOGI("sniffer_callback_beacon", "MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5])
     }

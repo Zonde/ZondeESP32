@@ -1,3 +1,6 @@
+#ifndef ACCESSPOINT_COLLECTOR_H
+#define ACCESSPOINT_COLLECTOR_H
+
 #include "esp_wifi.h"
 
 typedef struct {
