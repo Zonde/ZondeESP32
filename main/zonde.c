@@ -161,38 +161,57 @@ static void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
     const wifi_ieee80211_mac_hdr_t *hdr = &ipkt->hdr;
 
     // Filter on probe requests
-    if(hdr->frame_ctrl.subtype != 0x04) {
-        return;
+    if(hdr->frame_ctrl.subtype == 0x04) {
+      uint8_t* payload = (uint8_t*) ppkt->payload;
+      int body_len = ppkt->rx_ctrl.sig_len - 28;
+      uint8_t* body = payload + 24;
+
+      int i = 0;
+      while(i < body_len) {
+          uint8_t length = body[i+1];
+          if(body[i] == 0) {
+              // SSID
+              if(length > 0) {
+                  if(probes_len == PROBE_BUFFER_LEN) {
+                      ESP_LOGW("sniffer_callback", "probes buffer exhausted");
+                      return;
+                  }
+                  Probe* p = probes + probes_len++;
+                  memcpy(p->transmitter, hdr->addr2, 6);
+                  memcpy(p->ssid, body+i+2, length);
+                  p->ssid[length] = '\0';
+
+                  ESP_LOGI("sniffer_callback", "MAC: %02x:%02x:%02x:%02x:%02x:%02x, SSID: %s\n",
+                  p->transmitter[0], p->transmitter[1], p->transmitter[2],
+                  p->transmitter[3], p->transmitter[4], p->transmitter[5],
+                  p->ssid);
+              }
+              // TODO parse more
+          }
+          i += 2 + length;
+      }
+    }
+    // Filter on beacon frames
+    else if (hdr->frame_ctrl.subtype == 0x08) {
+      uint8_t* payload = (uint8_t*) ppkt->payload;
+      int body_len = ppkt->rx_ctrl.sig_len - 28;
+
+      uint8_t dest[6];
+      for (int i = 4; i < 10; i++) {
+        dest[i-4] = payload[i];
+      }
+      ESP_LOGI("BEACON DEST", "%02x:%02x:%02x:%02x:%02x:%02x", dest[0], dest[1], dest[2], dest[3], dest[4], dest[5])
+      uint8_t mac[6];
+      int i=10;
+      while (i < 16) {
+        mac[i-10] = payload[i];
+        i++;
+      }
+
+      ESP_LOGI("BEACON SRC", "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5])
     }
 
-    uint8_t* payload = (uint8_t*) ppkt->payload;
-    int body_len = ppkt->rx_ctrl.sig_len - 28;
-    uint8_t* body = payload + 24;
 
-    int i = 0;
-    while(i < body_len) {
-        uint8_t length = body[i+1];
-        if(body[i] == 0) {
-            // SSID
-            if(length > 0) {
-                if(probes_len == PROBE_BUFFER_LEN) {
-                    ESP_LOGW("sniffer_callback", "probes buffer exhausted");
-                    return;
-                }
-                Probe* p = probes + probes_len++;
-                memcpy(p->transmitter, hdr->addr2, 6);
-                memcpy(p->ssid, body+i+2, length);
-                p->ssid[length] = '\0';
-
-                ESP_LOGI("sniffer_callback", "MAC: %02x:%02x:%02x:%02x:%02x:%02x, SSID: %s\n",
-                p->transmitter[0], p->transmitter[1], p->transmitter[2],
-                p->transmitter[3], p->transmitter[4], p->transmitter[5],
-                p->ssid);
-            }
-            // TODO parse more
-        }
-        i += 2 + length;
-    }
 }
 
 /* Initialize Wi-Fi as sniffer */
