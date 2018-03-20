@@ -2,6 +2,8 @@
 #include "esp_log.h"
 #include "probes.h"
 
+#define RETRY_COUNT 3
+
 void upload_callback(request_t* req, char* data, int len)
 {
     ESP_LOGI("upload_callback", "%s", data);
@@ -24,13 +26,18 @@ void upload_results()
             probes[i].ssid
         );
         ESP_LOGI("upload_results", "Uploading: %s", postfields);
-        request_t* req = req_new("http://zonde.herokuapp.com/api/post/");
-        req_setopt(req, REQ_SET_METHOD, "POST");
-        req_setopt(req, REQ_SET_POSTFIELDS, postfields);
-        req_setopt(req, REQ_FUNC_DOWNLOAD_CB, upload_callback);
-        int status = req_perform(req);
-        req_clean(req);
-        ESP_LOGI("upload", "Status code: %d", status);
+        for(int j = 0; j < RETRY_COUNT; j++) {
+            request_t* req = req_new("http://zonde.herokuapp.com/api/post/");
+            req_setopt(req, REQ_SET_METHOD, "POST");
+            req_setopt(req, REQ_SET_POSTFIELDS, postfields);
+            req_setopt(req, REQ_FUNC_DOWNLOAD_CB, upload_callback);
+            int status = req_perform(req);
+            req_clean(req);
+            ESP_LOGI("upload", "Status code: %d", status);
+            if(status == 200) {
+                break;
+            }
+        }
     }
     Probe_set_clear(sniffed_probes);
 }

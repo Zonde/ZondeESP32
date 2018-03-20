@@ -7,6 +7,7 @@
 
 #define CONNECTED_BIT BIT0
 #define UPLOADING_BIT BIT1
+#define AP_MODE_BIT   BIT2
 
 EventGroupHandle_t wifi_event_group;
 

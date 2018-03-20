@@ -34,9 +34,16 @@ config JAM_ENABLED
 
 config JAM_COUNT
     int "Jam count"
-    range 1 10
+    range 1 100
     default 1
     help
         The amount of jams sent consecutively
+
+config DEAUTH_INTERVAL
+    int "Deauth interval"
+    range 1 60000
+    default 500
+    help
+        The number of milliseconds to pause before sending another wave of deauth packets
 
 endmenu

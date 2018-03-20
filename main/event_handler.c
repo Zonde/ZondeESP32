@@ -35,10 +35,12 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
 
         case SYSTEM_EVENT_AP_START:
             ESP_LOGI("event_handler", "SYSTEM_EVENT_AP_START");
+            xEventGroupSetBits(wifi_event_group, AP_MODE_BIT);
             break;
 
         case SYSTEM_EVENT_AP_STOP:
             ESP_LOGI("event_handler", "SYSTEM_EVENT_AP_STOP");
+            xEventGroupClearBits(wifi_event_group, AP_MODE_BIT);
             break;
 
         case SYSTEM_EVENT_AP_STACONNECTED:

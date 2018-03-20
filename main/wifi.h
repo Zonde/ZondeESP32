@@ -3,13 +3,8 @@
 
 #include "esp_wifi.h"
 
-// Set these parameters with `make menuconfig`
 #define DEFAULT_SSID            CONFIG_WIFI_SSID
 #define DEFAULT_PWD             CONFIG_WIFI_PASSWORD
-#define HOP_INTERVAL            CONFIG_CHANNEL_HOP_INTERVAL
-#define SNIFF_INTERVAL          (CONFIG_SNIFF_INTERVAL*1000)
-#define JAM_COUNT               CONFIG_JAM_COUNT
-
 #define DEFAULT_SCAN_METHOD     WIFI_FAST_SCAN
 #define DEFAULT_SORT_METHOD     WIFI_CONNECT_AP_BY_SIGNAL
 #define DEFAULT_RSSI            -127

@@ -1,11 +1,10 @@
-#include "sniffer_callback.h"
-#include "accesspoint_collector.h"
-
 #include "esp_log.h"
 
 #include <string.h>
 
 #include "probes.h"
+#include "beacons.h"
+#include "sniffer_callback.h"
 
 typedef struct {
     unsigned version:2;
@@ -53,7 +52,15 @@ void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
             uint8_t length = body[i+1];
             if(body[i] == 0) {
                 // SSID
-                if(length > 0) {
+                if(length > 32) {
+                    ESP_LOGW("sniffer_callback_probe", 
+                        "Invalid SSID length %d from MAC: %02x:%02x:%02x:%02x:%02x:%02x", 
+                        length, 
+                        hdr->addr2[0], hdr->addr2[1], hdr->addr2[2],
+                        hdr->addr2[3], hdr->addr2[4], hdr->addr2[5]
+                    );
+                }
+                else if(length > 0) {
                     Probe p;
                     memcpy(p.transmitter, hdr->addr2, 6);
                     memcpy(p.ssid, body+i+2, length);
@@ -61,14 +68,12 @@ void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
                         // Zero out the remaining part
                         p.ssid[i] = '\0';
                     }
-                    bool duplicate = Probe_set_add(sniffed_probes, &p);
-                    if(duplicate) {
-                        ESP_LOGW("sniffer_callback_probe", "Duplicate found!");
-                    }
+                    Probe_set_add(sniffed_probes, &p);
 
-                    ESP_LOGI("sniffer_callback_probe", "MAC: %02x:%02x:%02x:%02x:%02x:%02x, SSID: %s\n",
+                    ESP_LOGI("sniffer_callback_probe", "MAC: %02x:%02x:%02x:%02x:%02x:%02x, len: %d,  SSID: %s\n",
                     p.transmitter[0], p.transmitter[1], p.transmitter[2],
                     p.transmitter[3], p.transmitter[4], p.transmitter[5],
+                    length,
                     p.ssid);
                 }
                 // TODO parse more
@@ -85,6 +90,6 @@ void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
         }
         Beacon b;
         memcpy(b.source_mac, mac, 6);
-        add_beacon(&b);
+        Beacon_set_add(sniffed_beacons, &b);
     }
 }

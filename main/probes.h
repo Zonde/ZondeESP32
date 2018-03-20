@@ -12,4 +12,5 @@ typedef struct {
 SET_DEF(Probe)
 
 Probe_set sniffed_probes;
+
 #endif
