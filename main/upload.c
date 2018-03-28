@@ -4,6 +4,12 @@
 
 #define RETRY_COUNT 3
 
+#ifdef CONFIG_SERVER_UPLOAD_ENDPOINT
+#define SERVER_UPLOAD_ENDPOINT CONFIG_SERVER_UPLOAD_ENDPOINT
+#else
+#define SERVER_UPLOAD_ENDPOINT "http://zonde.herokuapp.com/api/post/"
+#endif
+
 void upload_callback(request_t* req, char* data, int len)
 {
     ESP_LOGI("upload_callback", "%s", data);
@@ -25,9 +31,9 @@ void upload_results()
             probes[i].transmitter[5],
             probes[i].ssid
         );
-        ESP_LOGI("upload_results", "Uploading: %s", postfields);
+        ESP_LOGI("upload_results", "Uploading: %s%s", SERVER_UPLOAD_ENDPOINT, postfields);
         for(int j = 0; j < RETRY_COUNT; j++) {
-            request_t* req = req_new("http://zonde.herokuapp.com/api/post/");
+            request_t* req = req_new(SERVER_UPLOAD_ENDPOINT);
             req_setopt(req, REQ_SET_METHOD, "POST");
             req_setopt(req, REQ_SET_POSTFIELDS, postfields);
             req_setopt(req, REQ_FUNC_DOWNLOAD_CB, upload_callback);

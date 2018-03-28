@@ -46,4 +46,10 @@ config DEAUTH_INTERVAL
     help
         The number of milliseconds to pause before sending another wave of deauth packets
 
+config SERVER_UPLOAD_ENDPOINT
+    string "Server upload endpoint"
+    default "http://zonde.herokuapp.com/api/post/"
+    help
+        The url to post probe requests to
+
 endmenu

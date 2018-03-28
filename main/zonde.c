@@ -53,6 +53,7 @@ void wifi_mode_task(void *pvParameter) {
         xEventGroupWaitBits(wifi_event_group, CAN_SWITCH_BIT, false, true, portMAX_DELAY);
         wifi_sta();
         xEventGroupSetBits(wifi_event_group, UPLOADING_BIT);
+        // TODO Wait for about 10 seconds, if not connected skip uploading this time
         xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
         upload_results();
         xEventGroupClearBits(wifi_event_group, UPLOADING_BIT);
